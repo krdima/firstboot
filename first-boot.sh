@@ -1,5 +1,7 @@
 #!/bin/bash
-set -e
+exec > >(tee -a /var/log/first-boot.log) 2>&1
+set -x
+
 
 # Параметры
 FINGERPRINT=$1
