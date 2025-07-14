@@ -50,7 +50,9 @@ KEYBOARD='{
     ]
 }'
 
-send_keyboard "✅ Сервер запущен!\n\n• IP: \`$EXTERNAL_IP\`\n• Отпечаток: \`$FINGERPRINT\`" "$KEYBOARD"
+send_keyboard "✅ Сервер запущен!
+IP: \`$EXTERNAL_IP\`
+Отпечаток: \`$FINGERPRINT\`" "$KEYBOARD"
 
 # Ожидание ответа
 TIMEOUT=$((SECONDS + 600))  # 10 минут таймаут
