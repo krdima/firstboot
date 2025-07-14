@@ -50,81 +50,126 @@ KEYBOARD='{
     ]
 }'
 
-send_keyboard "✅ Сервер запущен!
-IP: \`$EXTERNAL_IP\`
-Отпечаток: \`$FINGERPRINT\`" "$KEYBOARD"
+send_keyboard "✅ Сервер запущен!\n\n• IP: \`$EXTERNAL_IP\`\n• Отпечаток: \`$FINGERPRINT\`" "$KEYBOARD"
 
 # Ожидание ответа
 TIMEOUT=$((SECONDS + 600))  # 10 минут таймаут
 LAST_UPDATE_ID=0
 
 while [ $SECONDS -lt $TIMEOUT ]; do
-    RESPONSE=$(curl -s "$API_URL/getUpdates?offset=$((LAST_UPDATE_ID + 1))")
-    UPDATES=$(echo "$RESPONSE" | jq -r '.result[]')
+    # Получаем обновления с таймаутом
+    RESPONSE=$(curl -s -m 10 "$API_URL/getUpdates?offset=$((LAST_UPDATE_ID + 1))")
     
-    while read -r UPDATE; do
+    # Проверяем валидность JSON
+    if ! echo "$RESPONSE" | jq -e . >/dev/null 2>&1; then
+        sleep 5
+        continue
+    fi
+    
+    # Извлекаем список обновлений
+    UPDATES_COUNT=$(echo "$RESPONSE" | jq -r '.result | length')
+    
+    for ((i=0; i<UPDATES_COUNT; i++)); do
+        UPDATE=$(echo "$RESPONSE" | jq -r ".result[$i]")
         UPDATE_ID=$(echo "$UPDATE" | jq -r '.update_id')
-        CALLBACK=$(echo "$UPDATE" | jq -r '.callback_query')
         
+        # Обновляем последний ID
         if [ "$UPDATE_ID" -gt "$LAST_UPDATE_ID" ]; then
             LAST_UPDATE_ID=$UPDATE_ID
+        fi
+        
+        CALLBACK_QUERY=$(echo "$UPDATE" | jq -r '.callback_query')
+        if [ "$CALLBACK_QUERY" != "null" ]; then
+            DATA=$(echo "$CALLBACK_QUERY" | jq -r '.data')
+            CB_CHAT_ID=$(echo "$CALLBACK_QUERY" | jq -r '.message.chat.id')
+            CB_ID=$(echo "$CALLBACK_QUERY" | jq -r '.id')
             
-            if [ "$CALLBACK" != "null" ]; then
-                DATA=$(echo "$CALLBACK" | jq -r '.data')
-                CB_CHAT_ID=$(echo "$CALLBACK" | jq -r '.message.chat.id')
-                
-                if [ "$CB_CHAT_ID" = "$CHAT_ID" ]; then
-                    case $DATA in
-                        "deny")
-                            # Ответ на callback
-                            CB_ID=$(echo "$CALLBACK" | jq -r '.id')
-                            curl -s -X POST "$API_URL/answerCallbackQuery" \
-                                -d callback_query_id="$CB_ID"
+            if [ "$CB_CHAT_ID" = "$CHAT_ID" ]; then
+                case $DATA in
+                    "deny")
+                        # Ответ на callback
+                        curl -s -X POST "$API_URL/answerCallbackQuery" \
+                            -d callback_query_id="$CB_ID"
+                        
+                        # Самоудаление
+                        systemctl disable first-boot.service
+                        rm -f "$SELF_PATH" /etc/systemd/system/first-boot.service
+                        systemctl daemon-reload
+                        exit 0
+                        ;;
+                    "approve")
+                        # Ответ на callback
+                        curl -s -X POST "$API_URL/answerCallbackQuery" \
+                            -d callback_query_id="$CB_ID"
+                        
+                        # Запрос нового токена
+                        send_telegram "Введите новый токен бота:"
+                        TOKEN_TIMEOUT=$((SECONDS + 300))  # 5 минут на ввод токена
+                        TOKEN_RECEIVED=""
+                        
+                        while [ $SECONDS -lt $TOKEN_TIMEOUT ] && [ -z "$TOKEN_RECEIVED" ]; do
+                            TOKEN_RESP=$(curl -s -m 10 "$API_URL/getUpdates?offset=$((LAST_UPDATE_ID + 1))")
                             
-                            # Самоудаление
-                            systemctl disable first-boot.service
-                            rm -f "$SELF_PATH" /etc/systemd/system/first-boot.service
-                            systemctl daemon-reload
-                            exit 0
-                            ;;
-                        "approve")
-                            # Ответ на callback
-                            CB_ID=$(echo "$CALLBACK" | jq -r '.id')
-                            curl -s -X POST "$API_URL/answerCallbackQuery" \
-                                -d callback_query_id="$CB_ID"
+                            if echo "$TOKEN_RESP" | jq -e . >/dev/null 2>&1; then
+                                MSG_UPDATE=$(echo "$TOKEN_RESP" | jq -r '.result[0]')
+                                if [ "$MSG_UPDATE" != "null" ]; then
+                                    MSG_TEXT=$(echo "$MSG_UPDATE" | jq -r '.message.text // empty')
+                                    if [ -n "$MSG_TEXT" ]; then
+                                        MSG_CHAT_ID=$(echo "$MSG_UPDATE" | jq -r '.message.chat.id')
+                                        if [ "$MSG_CHAT_ID" = "$CHAT_ID" ]; then
+                                            TOKEN_RECEIVED="$MSG_TEXT"
+                                            LAST_UPDATE_ID=$(echo "$MSG_UPDATE" | jq -r '.update_id')
+                                        fi
+                                    fi
+                                fi
+                            fi
+                            sleep 2
+                        done
+                        
+                        if [ -z "$TOKEN_RECEIVED" ]; then
+                            send_telegram "⏰ Время ожидания токена истекло!"
+                            exit 1
+                        fi
+                        
+                        TG_BOT_TOKEN_NEW="$TOKEN_RECEIVED"
+                        
+                        # Запрос ссылки на скрипт
+                        send_telegram "Введите URL скрипта бота:"
+                        URL_TIMEOUT=$((SECONDS + 300))  # 5 минут на ввод URL
+                        URL_RECEIVED=""
+                        
+                        while [ $SECONDS -lt $URL_TIMEOUT ] && [ -z "$URL_RECEIVED" ]; do
+                            URL_RESP=$(curl -s -m 10 "$API_URL/getUpdates?offset=$((LAST_UPDATE_ID + 1))")
                             
-                            # Запрос нового токена
-                            send_telegram "Введите новый токен бота:"
-                            TOKEN_TIMEOUT=$((SECONDS + 300))  # 5 минут на ввод токена
+                            if echo "$URL_RESP" | jq -e . >/dev/null 2>&1; then
+                                URL_UPDATE=$(echo "$URL_RESP" | jq -r '.result[0]')
+                                if [ "$URL_UPDATE" != "null" ]; then
+                                    URL_TEXT=$(echo "$URL_UPDATE" | jq -r '.message.text // empty')
+                                    if [ -n "$URL_TEXT" ]; then
+                                        URL_CHAT_ID=$(echo "$URL_UPDATE" | jq -r '.message.chat.id')
+                                        if [ "$URL_CHAT_ID" = "$CHAT_ID" ]; then
+                                            URL_RECEIVED="$URL_TEXT"
+                                            LAST_UPDATE_ID=$(echo "$URL_UPDATE" | jq -r '.update_id')
+                                        fi
+                                    fi
+                                fi
+                            fi
+                            sleep 2
+                        done
+                        
+                        if [ -z "$URL_RECEIVED" ]; then
+                            send_telegram "⏰ Время ожидания URL истекло!"
+                            exit 1
+                        fi
+                        
+                        BOT_SCRIPT_URL="$URL_RECEIVED"
+                        
+                        # Скачивание и настройка бота
+                        if curl -sLo /usr/local/bin/bot_script "$BOT_SCRIPT_URL"; then
+                            chmod +x /usr/local/bin/bot_script
                             
-                            while [ $SECONDS -lt $TOKEN_TIMEOUT ]; do
-                                TOKEN_RESP=$(curl -s "$API_URL/getUpdates?offset=$((LAST_UPDATE_ID + 1))")
-                                TOKEN_UPDATE=$(echo "$TOKEN_RESP" | jq -r '.result[0]')
-                                
-                                if [ "$TOKEN_UPDATE" != "null" ]; then
-                                    MSG_TEXT=$(echo "$TOKEN_UPDATE" | jq -r '.message.text')
-                                    MSG_CHAT_ID=$(echo "$TOKEN_UPDATE" | jq -r '.message.chat.id')
-                                    
-                                    if [ "$MSG_CHAT_ID" = "$CHAT_ID" ]; then
-                                        TG_BOT_TOKEN_NEW="$MSG_TEXT"
-                                        
-                                        # Запрос ссылки на скрипт
-                                        send_telegram "Введите URL скрипта бота:"
-                                        URL_TIMEOUT=$((SECONDS + 300))  # 5 минут на ввод URL
-                                        
-                                        while [ $SECONDS -lt $URL_TIMEOUT ]; do
-                                            URL_RESP=$(curl -s "$API_URL/getUpdates?offset=$((LAST_UPDATE_ID + 2))")
-                                            URL_UPDATE=$(echo "$URL_RESP" | jq -r '.result[0]')
-                                            
-                                            if [ "$URL_UPDATE" != "null" ]; then
-                                                BOT_SCRIPT_URL=$(echo "$URL_UPDATE" | jq -r '.message.text')
-                                                
-                                                # Скачивание и настройка бота
-                                                curl -sLo /usr/local/bin/bot_script "$BOT_SCRIPT_URL"
-                                                chmod +x /usr/local/bin/bot_script
-                                                
-                                                # Создание сервиса
-                                                cat > /etc/systemd/system/tg-bot.service <<EOF
+                            # Создание сервиса
+                            cat > /etc/systemd/system/tg-bot.service <<EOF
 [Unit]
 Description=Telegram Bot Service
 After=network.target
@@ -137,33 +182,26 @@ User=root
 [Install]
 WantedBy=multi-user.target
 EOF
-                                                # Запуск сервиса
-                                                systemctl daemon-reload
-                                                systemctl enable tg-bot.service
-                                                systemctl start tg-bot.service
-                                                
-                                                # Самоудаление
-                                                systemctl disable first-boot.service
-                                                rm -f "$SELF_PATH" /etc/systemd/system/first-boot.service
-                                                systemctl daemon-reload
-                                                exit 0
-                                            fi
-                                            sleep 5
-                                        done
-                                        send_telegram "⏰ Время ожидания URL истекло!"
-                                        exit 1
-                                    fi
-                                fi
-                                sleep 5
-                            done
-                            send_telegram "⏰ Время ожидания токена истекло!"
+                            
+                            # Запуск сервиса
+                            systemctl daemon-reload
+                            systemctl enable tg-bot.service
+                            systemctl start tg-bot.service
+                            
+                            # Самоудаление
+                            systemctl disable first-boot.service
+                            rm -f "$SELF_PATH" /etc/systemd/system/first-boot.service
+                            systemctl daemon-reload
+                            exit 0
+                        else
+                            send_telegram "❌ Ошибка скачивания скрипта бота!"
                             exit 1
-                            ;;
-                    esac
-                fi
+                        fi
+                        ;;
+                esac
             fi
         fi
-    done <<< "$UPDATES"
+    done
     sleep 5
 done
 
