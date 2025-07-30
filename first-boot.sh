@@ -79,7 +79,7 @@ get_network_info() {
     # Точное определение типа интерфейса
     if [[ -d "/sys/class/net/$iface/wireless" ]]; then
         iface_type="Wi-Fi"
-    elif [[ -f "/sys/class/net/$iface/device/device" ]]; then
+    else
         iface_type="Ethernet"
     fi
     
@@ -88,7 +88,22 @@ get_network_info() {
 
 # Сканирование Wi-Fi интерфейсов
 scan_wifi_interfaces() {
+    for iface in /sys/class/net/*; do
+        if [ -d "$iface/wireless" ]; then
+            basename "$iface"
+        fi
+    done
+}
+
+# Сканирование доступных сетей
+scan_wifi_networks() {
     local iface="$1"
+    
+    # Проверка блокировки WiFi
+    if rfkill list wifi | grep -q "yes"; then
+        echo "ERR|WiFi заблокирован программно"
+        return 1
+    fi
     
     # Включаем интерфейс
     if ! ip link set dev "$iface" up; then
@@ -107,22 +122,22 @@ scan_wifi_interfaces() {
         return 1
     fi
     
-    # Сканируем сети
+    # Сканируем сети с таймаутом
     local scan_result
-    scan_result=$(timeout 30 iw dev "$iface" scan 2>&1) #скан с таймаутом
+    scan_result=$(timeout 30 iw dev "$iface" scan 2>&1)
     
     if [[ "$scan_result" == *"command failed"* ]]; then
-        echo "ERR|Ошибка сканирования: ${scan_result#*: }"
+        echo "ERR|Ошибка сканирования: ${scan_result##*: }"
         return 1
     fi
     
     # Обрабатываем результаты
     local networks
     networks=$(echo "$scan_result" | \
-    awk -F ':' '/SSID:/ {ssid=substr($0, index($0,":")+2; gsub(/^[ \t]+|[ \t]+$/, "", ssid)} 
-               /signal:/ {signal=$2; gsub(/^[ \t]+|[ \t]+$/, "", signal); print signal "|" ssid}' | \
-    sort -nr -t'|' -k1 | \
-    head -n 6)
+        awk -F ':' '/SSID:/ {ssid=substr($0, index($0,":")+2; gsub(/^[ \t]+|[ \t]+$/, "", ssid)} 
+                   /signal:/ {signal=$2; gsub(/^[ \t]+|[ \t]+$/, "", signal); print signal "|" ssid}' | \
+        sort -nr -t'|' -k1 | \
+        head -n 6)
     
     if [ -z "$networks" ]; then
         echo "ERR|Не найдено доступных сетей"
@@ -180,6 +195,7 @@ manage_ssh_port() {
     else
         ufw delete allow $SSH_PORT
     fi
+    ufw reload
 }
 
 # Основное меню бота
@@ -211,7 +227,6 @@ process_callback() {
             
         setup_duckdns)
             send_message "Введите токен и домен DuckDNS в формате: <токен> <домен>\nПример: abcdef12-1234-5678 mydomain.duckdns.org" ""
-            # Ожидаем ввода данных в следующем сообщении
             ;;
             
         setup_ansible)
@@ -234,10 +249,15 @@ process_callback() {
             ;;
             
         wifi_iface_*)
-            # Сохраняем выбранный интерфейс
             local iface="${callback_data#wifi_iface_}"
-            # Сканируем сети
             local networks=$(scan_wifi_networks "$iface")
+            
+            # Проверка на ошибки
+            if [[ "$networks" == ERR* ]]; then
+                send_message "❌ ${networks#ERR|}" ""
+                show_main_menu
+                continue
+            fi
             
             # Формируем клавиатуру с сетями
             local net_options=()
@@ -247,17 +267,18 @@ process_callback() {
                 net_options+=("$clean_ssid ($signal dBm)" "wifi_net_${clean_ssid}")
             done <<< "$networks"
             
+            # Сохраняем интерфейс для последующего использования
+            echo "$iface" > /tmp/wifi_iface_$CHAT_ID
+            
             local keyboard=$(generate_keyboard "${net_options[@]}")
             send_message "Выберите сеть:" "$keyboard"
             ;;
             
         wifi_net_*)
-            # Сохраняем выбранную сеть
             local ssid="${callback_data#wifi_net_}"
             # Сохраняем SSID для последующего использования
             echo "$ssid" > /tmp/wifi_ssid_$CHAT_ID
             send_message "Введите пароль для сети \"$ssid\":" ""
-            # Ожидаем ввода пароля
             ;;
     esac
 }
@@ -317,21 +338,15 @@ main() {
                     elif [ -f "/tmp/wifi_ssid_$CHAT_ID" ]; then
                         # Попытка подключения к Wi-Fi
                         local ssid=$(cat "/tmp/wifi_ssid_$CHAT_ID")
+                        local iface=$(cat "/tmp/wifi_iface_$CHAT_ID")
                         local password="$text"
-                        rm -f "/tmp/wifi_ssid_$CHAT_ID"
                         
-                        # Находим первый WiFi интерфейс
-                        local wifi_iface=$(scan_wifi_interfaces | head -n 1)
-                        
-                        if [ -z "$wifi_iface" ]; then
-                            send_message "❌ Не найден беспроводной интерфейс!" ""
-                            show_main_menu
-                            continue
-                        fi
+                        # Удаляем временные файлы
+                        rm -f "/tmp/wifi_ssid_$CHAT_ID" "/tmp/wifi_iface_$CHAT_ID"
                         
                         send_message "⌛ Попытка подключения к $ssid..." ""
                         
-                        if connect_to_wifi "$wifi_iface" "$ssid" "$password"; then
+                        if connect_to_wifi "$iface" "$ssid" "$password"; then
                             sleep 5  # Ждем применения настроек
                             local new_info_str=$(get_network_info)
                             IFS='|' read -r new_local_ip new_public_ip new_iface_type new_iface <<< "$new_info_str"
