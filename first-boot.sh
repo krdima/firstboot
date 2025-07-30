@@ -88,23 +88,46 @@ get_network_info() {
 
 # Сканирование Wi-Fi интерфейсов
 scan_wifi_interfaces() {
-    for iface in /sys/class/net/*; do
-        if [ -d "$iface/wireless" ]; then
-            basename "$iface"
-        fi
-    done
-}
-
-# Сканирование доступных сетей
-scan_wifi_networks() {
     local iface="$1"
-    local networks
     
-    # Используем современный iw вместо устаревшего iwlist
-    networks=$(iw dev "$iface" scan | \
-        awk -F ':' '/SSID:/ {ssid=$2; gsub(/^[ \t]+|[ \t]+$/, "", ssid)} /signal:/ {signal=$2; gsub(/^[ \t]+|[ \t]+$/, "", signal); print signal "|" ssid}' | \
-        sort -nr | \
-        head -n 6)
+    # Включаем интерфейс
+    if ! ip link set dev "$iface" up; then
+        echo "ERR|Не удалось включить интерфейс $iface"
+        return 1
+    fi
+    
+    # Ждем активации
+    sleep 2
+    
+    # Проверяем статус
+    local iface_status
+    iface_status=$(ip -o link show "$iface" | awk '{print $9}')
+    if [ "$iface_status" != "UP" ]; then
+        echo "ERR|Интерфейс $iface остался в состоянии DOWN"
+        return 1
+    fi
+    
+    # Сканируем сети
+    local scan_result
+    scan_result=$(timeout 30 iw dev "$iface" scan 2>&1) #скан с таймаутом
+    
+    if [[ "$scan_result" == *"command failed"* ]]; then
+        echo "ERR|Ошибка сканирования: ${scan_result#*: }"
+        return 1
+    fi
+    
+    # Обрабатываем результаты
+    local networks
+    networks=$(echo "$scan_result" | \
+    awk -F ':' '/SSID:/ {ssid=substr($0, index($0,":")+2; gsub(/^[ \t]+|[ \t]+$/, "", ssid)} 
+               /signal:/ {signal=$2; gsub(/^[ \t]+|[ \t]+$/, "", signal); print signal "|" ssid}' | \
+    sort -nr -t'|' -k1 | \
+    head -n 6)
+    
+    if [ -z "$networks" ]; then
+        echo "ERR|Не найдено доступных сетей"
+        return 1
+    fi
     
     echo "$networks"
 }
