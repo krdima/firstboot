@@ -16,7 +16,7 @@ SSH_PORT=22
 
 # Установка необходимых пакетов
 install_dependencies() {
-    local pkgs=("curl" "jq" "net-tools" "wireless-tools" "wpasupplicant" "ufw" "nginx" "ansible")
+    local pkgs=("curl" "jq" "net-tools" "iw" "wpasupplicant" "ufw" "nginx" "ansible")
     local missing=()
     
     for pkg in "${pkgs[@]}"; do
@@ -72,29 +72,41 @@ generate_keyboard() {
 # Получение текущего состояния сети
 get_network_info() {
     local local_ip=$(hostname -I | awk '{print $1}')
-    local public_ip=$(curl -s ifconfig.me)
+    local public_ip=$(curl -4 -s ifconfig.me --max-time 5 || echo "N/A")
     local iface=$(ip route | awk '/default/ {print $5}')
-    local iface_type="Wi-Fi"
+    local iface_type="Unknown"
     
-    [[ $iface == eth* ]] && iface_type="Ethernet"
+    # Точное определение типа интерфейса
+    if [[ -d "/sys/class/net/$iface/wireless" ]]; then
+        iface_type="Wi-Fi"
+    elif [[ -f "/sys/class/net/$iface/device/device" ]]; then
+        iface_type="Ethernet"
+    fi
     
     echo "$local_ip|$public_ip|$iface_type|$iface"
 }
 
 # Сканирование Wi-Fi интерфейсов
 scan_wifi_interfaces() {
-    iw dev | awk '/Interface/ {print $2}' | grep -v "lo"
+    for iface in /sys/class/net/*; do
+        if [ -d "$iface/wireless" ]; then
+            basename "$iface"
+        fi
+    done
 }
 
 # Сканирование доступных сетей
 scan_wifi_networks() {
     local iface="$1"
-    iw dev "$iface" scan | \
-        awk -F ':' '/SSID:/ {ssid=$2} /signal:/ {print $2 "|" ssid}' | \
+    local networks
+    
+    # Используем современный iw вместо устаревшего iwlist
+    networks=$(iw dev "$iface" scan | \
+        awk -F ':' '/SSID:/ {ssid=$2; gsub(/^[ \t]+|[ \t]+$/, "", ssid)} /signal:/ {signal=$2; gsub(/^[ \t]+|[ \t]+$/, "", signal); print signal "|" ssid}' | \
         sort -nr | \
-        head -n 6 | \
-        awk -F '|' '{print $2 " (" $1 " dBm)"}' | \
-        tr -d '\n'
+        head -n 6)
+    
+    echo "$networks"
 }
 
 # Подключение к Wi-Fi сети
@@ -168,9 +180,10 @@ process_callback() {
     
     case $callback_data in
         get_info)
-            local info=($(get_network_info))
+            local info_str=$(get_network_info)
+            IFS='|' read -r local_ip public_ip iface_type iface <<< "$info_str"
             local ports=$(ss -tuln)
-            send_message "📡 Сетевая информация:\n- Локальный IP: ${info[0]}\n- Внешний IP: ${info[1]}\n- Тип подключения: ${info[2]}\n- Интерфейс: ${info[3]}\n\n🔓 Открытые порты:\n$ports" ""
+            send_message "📡 Сетевая информация:\n- Локальный IP: $local_ip\n- Внешний IP: $public_ip\n- Тип подключения: $iface_type\n- Интерфейс: $iface\n\n🔓 Открытые порты:\n$ports" ""
             ;;
             
         setup_duckdns)
@@ -202,15 +215,14 @@ process_callback() {
             local iface="${callback_data#wifi_iface_}"
             # Сканируем сети
             local networks=$(scan_wifi_networks "$iface")
-            IFS='|' read -ra net_array <<< "$networks"
             
             # Формируем клавиатуру с сетями
             local net_options=()
-            for net in "${net_array[@]}"; do
-                # Убираем лишние пробелы и dBm в тексте
-                clean_net=$(echo "$net" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-                net_options+=("$clean_net" "wifi_net_${clean_net%% *}")
-            done
+            while IFS='|' read -r signal ssid; do
+                # Убираем лишние пробелы
+                clean_ssid=$(echo "$ssid" | xargs)
+                net_options+=("$clean_ssid ($signal dBm)" "wifi_net_${clean_ssid}")
+            done <<< "$networks"
             
             local keyboard=$(generate_keyboard "${net_options[@]}")
             send_message "Выберите сеть:" "$keyboard"
@@ -219,6 +231,8 @@ process_callback() {
         wifi_net_*)
             # Сохраняем выбранную сеть
             local ssid="${callback_data#wifi_net_}"
+            # Сохраняем SSID для последующего использования
+            echo "$ssid" > /tmp/wifi_ssid_$CHAT_ID
             send_message "Введите пароль для сети \"$ssid\":" ""
             # Ожидаем ввода пароля
             ;;
@@ -230,11 +244,12 @@ main() {
     install_dependencies
     
     # Начальная информация о сети
-    local info=($(get_network_info))
-    send_message "🤖 Бот запущен!\n- Отпечаток: $FINGERPRINT\n- Локальный IP: ${info[0]}\n- Внешний IP: ${info[1]}\n- Тип подключения: ${info[2]}" ""
+    local info_str=$(get_network_info)
+    IFS='|' read -r local_ip public_ip iface_type iface <<< "$info_str"
+    send_message "🤖 Бот запущен!\n- Отпечаток: $FINGERPRINT\n- Локальный IP: $local_ip\n- Внешний IP: $public_ip\n- Тип подключения: $iface_type\n- Интерфейс: $iface" ""
     
     # Если подключение по Ethernet, сканируем Wi-Fi интерфейсы
-    if [[ "${info[2]}" == "Ethernet" ]]; then
+    if [[ "$iface_type" == "Ethernet" ]]; then
         local ifaces=($(scan_wifi_interfaces))
         
         if [ ${#ifaces[@]} -gt 0 ]; then
@@ -257,7 +272,7 @@ main() {
         
         if [ "$count" -gt 0 ]; then
             offset=$(echo "$updates" | jq '.result[-1].update_id') 
-            ((offset++))
+            offset=$((offset + 1))
             
             for ((i=0; i<count; i++)); do
                 local message=$(echo "$updates" | jq -r ".result[$i].message")
@@ -270,18 +285,39 @@ main() {
                     # Обработка текстовых команд
                     if [ "$text" == "/start" ]; then
                         show_main_menu
-                    elif [[ "$text" =~ ^[a-zA-Z0-9\-]+\.[a-zA-Z0-9\-]+ ]]; then
+                    elif [[ "$text" =~ ^[a-zA-Z0-9\-]+\s+[a-zA-Z0-9\.\-]+ ]]; then
                         # DuckDNS данные
-                        setup_duckdns $text
-                        send_message "DuckDNS настроен для домена: $text" ""
+                        read token domain <<< "$text"
+                        setup_duckdns "$token" "$domain"
+                        send_message "✅ DuckDNS настроен для домена: $domain" ""
                         show_main_menu
-                    elif [ -n "$text" ]; then
+                    elif [ -f "/tmp/wifi_ssid_$CHAT_ID" ]; then
                         # Попытка подключения к Wi-Fi
-                        # Логика обработки пароля
-                        send_message "Попытка подключения..." ""
-                        # После подключения:
-                        local new_info=($(get_network_info))
-                        send_message "✅ Подключение установлено!\n- Локальный IP: ${new_info[0]}\n- Внешний IP: ${new_info[1]}" ""
+                        local ssid=$(cat "/tmp/wifi_ssid_$CHAT_ID")
+                        local password="$text"
+                        rm -f "/tmp/wifi_ssid_$CHAT_ID"
+                        
+                        # Находим первый WiFi интерфейс
+                        local wifi_iface=$(scan_wifi_interfaces | head -n 1)
+                        
+                        if [ -z "$wifi_iface" ]; then
+                            send_message "❌ Не найден беспроводной интерфейс!" ""
+                            show_main_menu
+                            continue
+                        fi
+                        
+                        send_message "⌛ Попытка подключения к $ssid..." ""
+                        
+                        if connect_to_wifi "$wifi_iface" "$ssid" "$password"; then
+                            sleep 5  # Ждем применения настроек
+                            local new_info_str=$(get_network_info)
+                            IFS='|' read -r new_local_ip new_public_ip new_iface_type new_iface <<< "$new_info_str"
+                            send_message "✅ Подключение установлено!\n- Локальный IP: $new_local_ip\n- Внешний IP: $new_public_ip" ""
+                        else
+                            send_message "❌ Ошибка подключения! Проверьте пароль и повторите попытку." ""
+                        fi
+                        show_main_menu
+                    elif [ "$text" == "/menu" ]; then
                         show_main_menu
                     fi
                 
