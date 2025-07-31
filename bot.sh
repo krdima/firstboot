@@ -95,7 +95,7 @@ scan_wifi_interfaces() {
     done
 }
 
-# Сканирование доступных сетей
+# Сканирование доступных сетей wlp6s0
 scan_wifi_networks() {
     local iface="$1"
     
@@ -306,10 +306,16 @@ main() {
     local offset=0
     while true; do
         local updates=$(curl -s "$API_URL/getUpdates?offset=$offset&timeout=60")
-        local count=$(echo "$updates" | jq '.result | length')
+        # Исправление ошибки "integer expression expected"
+        local count=$(echo "$updates" | jq -r '.result | length' 2>/dev/null || echo 0)
+        
+        # Проверяем, что count - число
+        if ! [[ "$count" =~ ^[0-9]+$ ]]; then
+            count=0
+        fi
         
         if [ "$count" -gt 0 ]; then
-            offset=$(echo "$updates" | jq '.result[-1].update_id') 
+            offset=$(echo "$updates" | jq -r '.result[-1].update_id' 2>/dev/null || echo 0)
             offset=$((offset + 1))
             
             for ((i=0; i<count; i++)); do
