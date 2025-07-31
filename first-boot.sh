@@ -18,6 +18,23 @@ INSTALL_DIR="/root/bot/"
 mkdir -p "$INSTALL_DIR"
 cd "$INSTALL_DIR" || exit 1
 
+# Проверка сети с повторными попытками
+        NETWORK_OK=0
+        for i in {1..10}; do
+          if ping -c 3 8.8.8.8 &>/dev/null; then
+            echo "Сеть доступна"
+            NETWORK_OK=1
+            break
+          else
+            echo "Попытка $i/10: сеть недоступна"
+            sleep 5
+          fi
+        done
+        if [ "$NETWORK_OK" -eq 0 ]; then
+          echo "Критическая ошибка: сеть недоступна"
+          exit 1
+        fi
+
 # Обновление из Git
 update_bot() {
     echo "🔁 Проверка обновлений бота..."
