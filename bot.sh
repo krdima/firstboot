@@ -185,6 +185,9 @@ network:
           password: "$password"
 EOL
     
+    # Устанавливаем правильные права доступа
+    chmod 600 "$conf_file"
+    
     # Применение конфигурации
     if netplan apply; then
         return 0
