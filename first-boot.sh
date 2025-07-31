@@ -99,12 +99,6 @@ scan_wifi_interfaces() {
 scan_wifi_networks() {
     local iface="$1"
     
-    # Проверка блокировки WiFi
-    if rfkill list wifi | grep -q "yes"; then
-        echo "ERR|WiFi заблокирован программно"
-        return 1
-    fi
-    
     # Включаем интерфейс
     if ! ip link set dev "$iface" up; then
         echo "ERR|Не удалось включить интерфейс $iface"
@@ -112,7 +106,7 @@ scan_wifi_networks() {
     fi
     
     # Ждем активации
-    sleep 2
+    sleep 10
     
     # Проверяем статус
     local iface_status
