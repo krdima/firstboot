@@ -250,7 +250,7 @@ process_callback() {
             if [[ "$networks" == ERR* ]]; then
                 send_message "❌ ${networks#ERR|}" ""
                 show_main_menu
-                continue
+                return 0
             fi
             
             # Формируем клавиатуру с сетями
