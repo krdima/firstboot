@@ -243,15 +243,15 @@ process_callback() {
             local info_str=$(get_network_info)
             IFS='|' read -r local_ip public_ip iface_type iface <<< "$info_str"
             local ports=$(ss -tuln)
-            send_message "📡 Сетевая информация:\n- Локальный IP: $local_ip\n- Внешний IP: $public_ip\n- Тип подключения: $iface_type\n- Интерфейс: $iface\n\n🔓 Открытые порты:\n$ports" ""
+            send_message "📡 Сетевая информация:%0A- Локальный IP: $local_ip%0A- Внешний IP: $public_ip%0A- Тип подключения: $iface_type%0A- Интерфейс: $iface%0A%0A🔓 Открытые порты:%0A$ports" ""
             ;;
             
         setup_duckdns)
-            send_message "Введите токен и домен DuckDNS в формате: <токен> <домен>\nПример: abcdef12-1234-5678 mydomain.duckdns.org" ""
+            send_message "Введите токен и домен DuckDNS в формате: <токен> <домен>%0AПример: abcdef12-1234-5678 mydomain.duckdns.org" ""
             ;;
             
         setup_ansible)
-            send_message "Настройка Ansible роли...\nИмитация: git clone <repo> && ansible-playbook setup.yml" ""
+            send_message "Настройка Ansible роли...%0AИмитация: git clone <repo> && ansible-playbook setup.yml" ""
             ;;
             
         manage_ssh)
@@ -319,7 +319,7 @@ main() {
     # Начальная информация о сети
     local info_str=$(get_network_info)
     IFS='|' read -r local_ip public_ip iface_type iface <<< "$info_str"
-    send_message "🤖 Бот запущен!\n- Отпечаток: $FINGERPRINT\n- Локальный IP: $local_ip\n- Внешний IP: $public_ip\n- Тип подключения: $iface_type\n- Интерфейс: $iface" ""
+    send_message "🤖 Бот запущен!%0A- Отпечаток: $FINGERPRINT%0A- Локальный IP: $local_ip%0A- Внешний IP: $public_ip%0A- Тип подключения: $iface_type%0A- Интерфейс: $iface" ""
     
     # Если подключение по Ethernet, сканируем Wi-Fi интерфейсы
     if [[ "$iface_type" == "Ethernet" ]]; then
@@ -385,7 +385,7 @@ main() {
                             sleep 5  # Ждем применения настроек
                             local new_info_str=$(get_network_info)
                             IFS='|' read -r new_local_ip new_public_ip new_iface_type new_iface <<< "$new_info_str"
-                            send_message "✅ Подключение установлено!\n- Локальный IP: $new_local_ip\n- Внешний IP: $new_public_ip" ""
+                            send_message "✅ Подключение установлено!%0A- Локальный IP: $new_local_ip%0A- Внешний IP: $new_public_ip" ""
                         else
                             send_message "❌ Ошибка подключения! Проверьте пароль и повторите попытку." ""
                         fi
