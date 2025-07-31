@@ -203,8 +203,42 @@ setup_duckdns() {
     local domain="$2"
     local cron_job="*/5 * * * * curl -s 'https://www.duckdns.org/update?domains=$domain&token=$token&ip=' >/dev/null"
     
-    # Добавление задачи в cron
-    (crontab -l 2>/dev/null; echo "$cron_job") | crontab -
+    echo "DEBUG: Настройка DuckDNS с параметрами: token=$token domain=$domain" >&2
+    echo "DEBUG: Cron job: $cron_job" >&2
+    
+    # Создаем временный файл для cron
+    local temp_cron=$(mktemp)
+    
+    # Сохраняем существующие задачи
+    crontab -l > "$temp_cron" 2>/dev/null || true
+    
+    # Удаляем старые задачи DuckDNS если есть
+    sed -i '/duckdns\.org\/update/d' "$temp_cron"
+    
+    # Добавляем новую задачу
+    echo "$cron_job" >> "$temp_cron"
+    
+    # Устанавливаем обновленный crontab
+    if crontab "$temp_cron"; then
+        echo "DEBUG: Crontab успешно обновлен" >&2
+        rm -f "$temp_cron"
+        
+        # Проверяем установку
+        echo "DEBUG: Текущие задачи cron:" >&2
+        crontab -l >&2
+        
+        # Тестовый запрос
+        local test_url="https://www.duckdns.org/update?domains=$domain&token=$token&ip=1.2.3.4"
+        echo "DEBUG: Тестовый запрос: $test_url" >&2
+        local response=$(curl -s "$test_url")
+        echo "DEBUG: Ответ DuckDNS: $response" >&2
+        
+        return 0
+    else
+        echo "ERROR: Не удалось установить crontab" >&2
+        rm -f "$temp_cron"
+        return 1
+    fi
 }
 
 # Управление SSH портом
