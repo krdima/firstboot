@@ -355,6 +355,7 @@ main() {
     local info_str=$(get_network_info)
     IFS='|' read -r local_ip public_ip iface_type iface <<< "$info_str"
     send_message "🤖 Бот запущен!%0A- Отпечаток: $FINGERPRINT%0A- Локальный IP: $local_ip%0A- Внешний IP: $public_ip%0A- Тип подключения: $iface_type%0A- Интерфейс: $iface" ""
+    show_main_menu
     
     # Если подключение по Ethernet, сканируем Wi-Fi интерфейсы
     if [[ "$iface_type" == "Ethernet" ]]; then
@@ -408,7 +409,7 @@ main() {
                     if [ "$text" == "/start" ]; then
                         echo "DEBUG: Обработка /start" >&2
                         show_main_menu
-                    elif ["$text" =~ ^[a-zA-Z0-9\-]+\s+[a-zA-Z0-9\.\-]+ ]; then
+                    elif [[ "$text" =~ ^[a-zA-Z0-9\-]+\s+[a-zA-Z0-9\.\-]+ ]]; then
                         # DuckDNS данные
                         echo "DEBUG: Обнаружены данные DuckDNS" >&2
                         read token domain <<< "$text"
