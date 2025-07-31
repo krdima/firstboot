@@ -30,7 +30,6 @@ if [ -f "${INSTALL_DIR}/${SCRIPT_NAME}" ] && [ -f "${SCRIPT_NAME}" ]; then
         chmod +x "${INSTALL_DIR}/${SCRIPT_NAME}";
     fi;
 rm -rf /tmp/bot-update
-fi
 
 cd /root
 ./bot.sh "$FINGERPRINT" "$TG_BOT_TOKEN" "$CHAT_ID"
