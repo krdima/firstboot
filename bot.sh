@@ -375,6 +375,7 @@ main() {
     # Основной цикл обработки сообщений
     local offset=0
     while true; do
+        echo "DEBUG: Проверка обновлений Telegram..." >&2
         local updates=$(curl -s "$API_URL/getUpdates?offset=$offset&timeout=60")
         # Исправление ошибки "integer expression expected"
         local count=$(echo "$updates" | jq -r '.result | length' 2>/dev/null || echo 0)
@@ -384,11 +385,16 @@ main() {
             count=0
         fi
         
+        echo "DEBUG: Получено $count сообщений" >&2
+
         if [ "$count" -gt 0 ]; then
             offset=$(echo "$updates" | jq -r '.result[-1].update_id' 2>/dev/null || echo 0)
             offset=$((offset + 1))
             
             for ((i=0; i<count; i++)); do
+                
+                echo "DEBUG: Обработка сообщения $i/$count" >&2
+                
                 local message=$(echo "$updates" | jq -r ".result[$i].message")
                 local callback=$(echo "$updates" | jq -r ".result[$i].callback_query")
                 
@@ -396,11 +402,15 @@ main() {
                     local text=$(echo "$message" | jq -r '.text')
                     local chat_id=$(echo "$message" | jq -r '.chat.id')
                     
+                    echo "DEBUG: Текстовое сообщение: $text" >&2
+
                     # Обработка текстовых команд
                     if [ "$text" == "/start" ]; then
+                        echo "DEBUG: Обработка /start" >&2
                         show_main_menu
                     elif [[ "$text" =~ ^[a-zA-Z0-9\-]+\s+[a-zA-Z0-9\.\-]+ ]]; then
                         # DuckDNS данные
+                        echo "DEBUG: Обнаружены данные DuckDNS" >&2
                         read token domain <<< "$text"
                         setup_duckdns "$token" "$domain"
                         echo "DEBUG: Получены данные DuckDNS: token='$token' domain='$domain'" >&2
@@ -428,6 +438,8 @@ main() {
                         show_main_menu
                     elif [ "$text" == "/menu" ]; then
                         show_main_menu
+                    else
+                        echo "DEBUG: Неопознанная команда: $text" >&2
                     fi
                 
                 elif [ "$callback" != "null" ]; then
@@ -435,7 +447,11 @@ main() {
                     local chat_id=$(echo "$callback" | jq -r '.message.chat.id')
                     local msg_id=$(echo "$callback" | jq -r '.message.message_id')
                     
+                    echo "DEBUG: Обработка callback: $data" >&2
+
                     process_callback "$data" "$msg_id"
+                else
+                    echo "DEBUG: Неизвестный тип сообщения" >&2
                 fi
             done
         fi
