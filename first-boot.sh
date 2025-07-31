@@ -14,22 +14,42 @@ GIT_BRANCH="main"
 SCRIPT_NAME="bot.sh"
 INSTALL_DIR="/root/"
 
-mkdir -p /tmp/bot-update; 
-cd /tmp/bot-update;
-git clone --quiet --depth 1 --branch "${GIT_BRANCH}" "${GIT_REPO}" . >/dev/null 2>&1;
-if [ -f "${INSTALL_DIR}/${SCRIPT_NAME}" ] && [ -f "${SCRIPT_NAME}" ]; then
-    current_hash=$(sha256sum "${INSTALL_DIR}/${SCRIPT_NAME}" | cut -d" " -f1);
-    new_hash=$(sha256sum "${SCRIPT_NAME}" | cut -d" " -f1);
-    if [ "$current_hash" != "$new_hash" ]; then
-        echo "[Bot Service] Обновление скрипта обнаружено";
-        cp -f "${SCRIPT_NAME}" "${INSTALL_DIR}/${SCRIPT_NAME}";
-        chmod +x "${INSTALL_DIR}/${SCRIPT_NAME}";
-    fi;
-    elif [ -f "${SCRIPT_NAME}" ]; then
-        cp -f "${SCRIPT_NAME}" "${INSTALL_DIR}/${SCRIPT_NAME}";
-        chmod +x "${INSTALL_DIR}/${SCRIPT_NAME}";
-    fi;
-rm -rf /tmp/bot-update
+# Создаем рабочую директорию
+mkdir -p "$INSTALL_DIR"
+cd "$INSTALL_DIR" || exit 1
 
-cd /root
-./bot.sh "$FINGERPRINT" "$TG_BOT_TOKEN" "$CHAT_ID"
+# Обновление из Git
+update_bot() {
+    echo "🔁 Проверка обновлений бота..."
+    
+    if [ ! -d ".git" ]; then
+        echo "🔄 Первоначальное клонирование репозитория..."
+        git clone -b "$BRANCH" "$REPO_URL" . || return 1
+        chmod +x "$SCRIPT_NAME"
+        return 0
+    fi
+    
+    # Проверяем обновления
+    git fetch origin
+    LOCAL_COMMIT=$(git rev-parse HEAD)
+    REMOTE_COMMIT=$(git rev-parse origin/"$BRANCH")
+    
+    if [ "$LOCAL_COMMIT" != "$REMOTE_COMMIT" ]; then
+        echo "🔄 Обнаружены обновления. Выполняем обновление..."
+        git reset --hard origin/"$BRANCH"
+        git pull origin "$BRANCH"
+        chmod +x "$SCRIPT_NAME"
+    fi
+    
+    return 0
+}
+
+# Основная логика
+if update_bot; then
+    echo "✅ Бот успешно обновлен"
+    # Запускаем основную программу
+    exec "./$SCRIPT_NAME" "$FINGERPRINT" "$TG_BOT_TOKEN" "$CHAT_ID"
+else
+    echo "❌ Ошибка обновления бота"
+    exit 1
+fi
