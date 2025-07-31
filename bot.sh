@@ -267,10 +267,10 @@ process_callback() {
             
         wifi_iface_*)
             local iface="${callback_data#wifi_iface_}"
-            echo "DEBUG: Начало обработки интерфейса $iface" >&2
+            #echo "DEBUG: Начало обработки интерфейса $iface" >&2
 
             local networks=$(scan_wifi_networks "$iface")
-            echo "DEBUG: Результат сканирования сетей: $networks" >&2
+            #echo "DEBUG: Результат сканирования сетей: $networks" >&2
 
             # Проверка на ошибки
             if [[ "$networks" == ERR* ]]; then
@@ -293,7 +293,7 @@ process_callback() {
             #echo "DEBUG: Интерфейс $iface сохранен в /tmp/wifi_iface_$CHAT_ID" >&2
 
             local keyboard=$(generate_keyboard "${net_options[@]}")
-            #echo "DEBUG: Сгенерирована клавиатура: $keyboard" >&2
+            echo "DEBUG: Сгенерирована клавиатура: $keyboard" >&2
 
             send_message "Выберите сеть:" "$keyboard"
             echo "DEBUG: Сообщение с выбором сети отправлено" >&2
