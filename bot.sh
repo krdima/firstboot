@@ -52,9 +52,9 @@ generate_keyboard() {
     
     while [ $# -gt 0 ]; do
         # Добавляем запятую между элементами в строке
-        if [ ${#row[@]} -gt 0 ]; then
+        #if [ ${#row[@]} -gt 0 ]; then
             #row+=(',')
-        fi
+        #fi
         
         row+=("{\"text\":\"$1\",\"callback_data\":\"$2\"}")
         shift 2
