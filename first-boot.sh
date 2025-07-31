@@ -12,7 +12,7 @@ CHAT_ID="$3"
 REPO_URL="https://github.com/krdima/firstboot.git"
 BRANCH="main"
 SCRIPT_NAME="bot.sh"
-INSTALL_DIR="/root/"
+INSTALL_DIR="/root/bot/"
 
 # Создаем рабочую директорию
 mkdir -p "$INSTALL_DIR"
