@@ -118,7 +118,7 @@ scan_wifi_networks() {
     
     # Сканируем сети с таймаутом
     local scan_result
-    scan_result=$(timeout 30 iw dev "$iface" scan 2>&1)
+    scan_result=$(timeout 10 iw dev "$iface" scan 2>&1)
     
     if [[ "$scan_result" == *"command failed"* ]]; then
         echo "ERR|Ошибка сканирования: ${scan_result##*: }"
