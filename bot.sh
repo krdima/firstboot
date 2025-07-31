@@ -125,6 +125,7 @@ scan_wifi_networks() {
         return 1
     fi
     
+    
     # Обрабатываем результаты
     local networks
     networks=$(echo "$scan_result" | \
@@ -140,7 +141,9 @@ scan_wifi_networks() {
                 print signal "|" ssid;
             }
         ' | sort -nr -t'|' -k1 | head -n 6)
-    
+    #show journal debug
+    echo "Networks result: $networks" >&2
+
     if [ -z "$networks" ]; then
         echo "ERR|Не найдено доступных сетей"
         return 1
