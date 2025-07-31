@@ -66,6 +66,7 @@ generate_keyboard() {
     keyboard+=$(IFS=,; echo "${rows[*]}")
     keyboard+=']}'
     
+    echo "Generated keyboard JSON: $keyboard" >&2
     echo "$keyboard"
 }
 
@@ -142,7 +143,7 @@ scan_wifi_networks() {
             }
         ' | sort -nr -t'|' -k1 | head -n 6)
     #show journal debug
-    echo "Networks result: $networks" >&2
+    #echo "Networks result: $networks" >&2
 
     if [ -z "$networks" ]; then
         echo "ERR|Не найдено доступных сетей"
@@ -255,8 +256,11 @@ process_callback() {
             
         wifi_iface_*)
             local iface="${callback_data#wifi_iface_}"
+            echo "DEBUG: Начало обработки интерфейса $iface" >&2
+
             local networks=$(scan_wifi_networks "$iface")
-            
+            echo "DEBUG: Результат сканирования сетей: $networks" >&2
+
             # Проверка на ошибки
             if [[ "$networks" == ERR* ]]; then
                 send_message "❌ ${networks#ERR|}" ""
@@ -270,13 +274,18 @@ process_callback() {
                 # Убираем лишние пробелы
                 clean_ssid=$(echo "$ssid" | xargs)
                 net_options+=("$clean_ssid ($signal dBm)" "wifi_net_${clean_ssid}")
+                echo "DEBUG: Добавлена сеть: $clean_ssid ($signal dBm) -> wifi_net_${clean_ssid}" >&2
             done <<< "$networks"
             
             # Сохраняем интерфейс для последующего использования
             echo "$iface" > /tmp/wifi_iface_$CHAT_ID
-            
+            echo "DEBUG: Интерфейс $iface сохранен в /tmp/wifi_iface_$CHAT_ID" >&2
+
             local keyboard=$(generate_keyboard "${net_options[@]}")
+            echo "DEBUG: Сгенерирована клавиатура: $keyboard" >&2
+
             send_message "Выберите сеть:" "$keyboard"
+            echo "DEBUG: Сообщение с выбором сети отправлено" >&2
             ;;
             
         wifi_net_*)
