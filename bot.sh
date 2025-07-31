@@ -203,9 +203,6 @@ setup_duckdns() {
     local domain="$2"
     local cron_job="*/5 * * * * curl -s 'https://www.duckdns.org/update?domains=$domain&token=$token&ip=' >/dev/null"
     
-    echo "DEBUG: Настройка DuckDNS с параметрами: token=$token domain=$domain" >&2
-    echo "DEBUG: Cron job: $cron_job" >&2
-    
     # Создаем временный файл для cron
     local temp_cron=$(mktemp)
     
@@ -220,18 +217,10 @@ setup_duckdns() {
     
     # Устанавливаем обновленный crontab
     if crontab "$temp_cron"; then
-        echo "DEBUG: Crontab успешно обновлен" >&2
         rm -f "$temp_cron"
         
         # Проверяем установку
-        echo "DEBUG: Текущие задачи cron:" >&2
         crontab -l >&2
-        
-        # Тестовый запрос
-        local test_url="https://www.duckdns.org/update?domains=$domain&token=$token&ip=1.2.3.4"
-        echo "DEBUG: Тестовый запрос: $test_url" >&2
-        local response=$(curl -s "$test_url")
-        echo "DEBUG: Ответ DuckDNS: $response" >&2
         
         return 0
     else
@@ -282,7 +271,6 @@ process_callback() {
             
         setup_duckdns)
             send_message "Введите токен и домен DuckDNS в формате: <токен> <домен>%0AПример: abcdef12-1234-5678 mydomain.duckdns.org" ""
-            echo "DEBUG: Запрошены данные DuckDNS" >&2
             ;;
             
         setup_ansible)
@@ -332,10 +320,8 @@ process_callback() {
             #echo "DEBUG: Интерфейс $iface сохранен в /tmp/wifi_iface_$CHAT_ID" >&2
 
             local keyboard=$(generate_keyboard "${net_options[@]}")
-            echo "DEBUG: Сгенерирована клавиатура: $keyboard" >&2
 
             send_message "Выберите сеть:" "$keyboard"
-            echo "DEBUG: Сообщение с выбором сети отправлено" >&2
             ;;
             
         wifi_net_*)
@@ -376,7 +362,6 @@ main() {
     # Основной цикл обработки сообщений
     local offset=0
     while true; do
-        echo "DEBUG: Проверка обновлений Telegram..." >&2
         local updates=$(curl -s "$API_URL/getUpdates?offset=$offset&timeout=60")
         # Исправление ошибки "integer expression expected"
         local count=$(echo "$updates" | jq -r '.result | length' 2>/dev/null || echo 0)
@@ -385,36 +370,27 @@ main() {
         if ! [[ "$count" =~ ^[0-9]+$ ]]; then
             count=0
         fi
-        
-        echo "DEBUG: Получено $count сообщений" >&2
 
         if [ "$count" -gt 0 ]; then
             offset=$(echo "$updates" | jq -r '.result[-1].update_id' 2>/dev/null || echo 0)
             offset=$((offset + 1))
             
             for ((i=0; i<count; i++)); do
-                
-                echo "DEBUG: Обработка сообщения $i/$count" >&2
-                
+
                 local message=$(echo "$updates" | jq -r ".result[$i].message")
                 local callback=$(echo "$updates" | jq -r ".result[$i].callback_query")
                 
                 if [ "$message" != "null" ]; then
                     local text=$(echo "$message" | jq -r '.text')
                     local chat_id=$(echo "$message" | jq -r '.chat.id')
-                    
-                    echo "DEBUG: Текстовое сообщение: $text" >&2
 
                     # Обработка текстовых команд
                     if [ "$text" == "/start" ]; then
-                        echo "DEBUG: Обработка /start" >&2
                         show_main_menu
                     elif [ $(echo "$text" | wc -w) -eq 2 ]; then
                         # DuckDNS данные
-                        echo "DEBUG: Обнаружены данные DuckDNS" >&2
                         read token domain <<< "$text"
                         setup_duckdns "$token" "$domain"
-                        echo "DEBUG: Получены данные DuckDNS: token='$token' domain='$domain'" >&2
                         send_message "✅ DuckDNS настроен для домена: $domain" ""
                         show_main_menu
                     elif [ -f "/tmp/wifi_ssid_$CHAT_ID" ]; then
