@@ -53,7 +53,7 @@ generate_keyboard() {
     while [ $# -gt 0 ]; do
         # Добавляем запятую между элементами в строке
         if [ ${#row[@]} -gt 0 ]; then
-            row+=(',')
+            #row+=(',')
         fi
         
         row+=("{\"text\":\"$1\",\"callback_data\":\"$2\"}")
@@ -79,6 +79,7 @@ generate_keyboard() {
     keyboard+=']}'
     
     echo "$keyboard"
+    
 }
 
 # Получение текущего состояния сети
@@ -284,7 +285,7 @@ process_callback() {
             while IFS='|' read -r signal ssid; do
                 # Убираем лишние пробелы
                 clean_ssid=$(echo "$ssid" | xargs)
-                net_options+=("$clean_ssid ($signal dBm)" "wifi_net_${clean_ssid}")
+                net_options+=("$clean_ssid ($signal)" "wifi_net_${clean_ssid}")
                 #echo "DEBUG: Добавлена сеть: $clean_ssid ($signal dBm) -> wifi_net_${clean_ssid}" >&2
             done <<< "$networks"
             
