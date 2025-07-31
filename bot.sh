@@ -109,12 +109,12 @@ scan_wifi_networks() {
     sleep 10
     
     # Проверяем статус
-    local iface_status
-    iface_status=$(ip -o link show "$iface" | awk '{print $9}')
-    if [ "$iface_status" != "UP" ]; then
-        echo "ERR|Интерфейс $iface остался в состоянии DOWN"
-        return 1
-    fi
+    #local iface_status
+    #iface_status=$(ip -o link show "$iface" | awk '{print $9}')
+    #if [ "$iface_status" != "UP" ]; then
+    #    echo "ERR|Интерфейс $iface остался в состоянии DOWN"
+    #    return 1
+    #fi
     
     # Сканируем сети с таймаутом
     local scan_result
