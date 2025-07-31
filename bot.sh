@@ -51,22 +51,33 @@ generate_keyboard() {
     local count=0
     
     while [ $# -gt 0 ]; do
+        # Добавляем запятую между элементами в строке
+        if [ ${#row[@]} -gt 0 ]; then
+            row+=(',')
+        fi
+        
         row+=("{\"text\":\"$1\",\"callback_data\":\"$2\"}")
         shift 2
         ((count++))
         
         if [ $count -eq 2 ]; then
-            rows+=("[${row[*]}]")
+            # Объединяем элементы строки
+            local row_str=$(IFS=,; echo "${row[*]}")
+            rows+=("[$row_str]")
             row=()
             count=0
         fi
     done
     
-    [ ${#row[@]} -gt 0 ] && rows+=("[${row[*]}]")
+    # Добавляем последнюю неполную строку
+    if [ ${#row[@]} -gt 0 ]; then
+        local row_str=$(IFS=,; echo "${row[*]}")
+        rows+=("[$row_str]")
+    fi
+    
     keyboard+=$(IFS=,; echo "${rows[*]}")
     keyboard+=']}'
     
-    echo "Generated keyboard JSON: $keyboard" >&2
     echo "$keyboard"
 }
 
@@ -274,15 +285,15 @@ process_callback() {
                 # Убираем лишние пробелы
                 clean_ssid=$(echo "$ssid" | xargs)
                 net_options+=("$clean_ssid ($signal dBm)" "wifi_net_${clean_ssid}")
-                echo "DEBUG: Добавлена сеть: $clean_ssid ($signal dBm) -> wifi_net_${clean_ssid}" >&2
+                #echo "DEBUG: Добавлена сеть: $clean_ssid ($signal dBm) -> wifi_net_${clean_ssid}" >&2
             done <<< "$networks"
             
             # Сохраняем интерфейс для последующего использования
             echo "$iface" > /tmp/wifi_iface_$CHAT_ID
-            echo "DEBUG: Интерфейс $iface сохранен в /tmp/wifi_iface_$CHAT_ID" >&2
+            #echo "DEBUG: Интерфейс $iface сохранен в /tmp/wifi_iface_$CHAT_ID" >&2
 
             local keyboard=$(generate_keyboard "${net_options[@]}")
-            echo "DEBUG: Сгенерирована клавиатура: $keyboard" >&2
+            #echo "DEBUG: Сгенерирована клавиатура: $keyboard" >&2
 
             send_message "Выберите сеть:" "$keyboard"
             echo "DEBUG: Сообщение с выбором сети отправлено" >&2
