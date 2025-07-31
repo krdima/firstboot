@@ -128,10 +128,18 @@ scan_wifi_networks() {
     # Обрабатываем результаты
     local networks
     networks=$(echo "$scan_result" | \
-        awk -F ':' '/SSID:/ {ssid=substr($0, index($0,":")+2; gsub(/^[ \t]+|[ \t]+$/, "", ssid)} 
-                   /signal:/ {signal=$2; gsub(/^[ \t]+|[ \t]+$/, "", signal); print signal "|" ssid}' | \
-        sort -nr -t'|' -k1 | \
-        head -n 6)
+        awk -F ':' '
+            /SSID:/ {
+                start = index($0, ":") + 1;
+                ssid = substr($0, start + 1);
+                gsub(/^[[:blank:]]+|[[:blank:]]+$/, "", ssid);
+            }
+            /signal:/ {
+                signal = $2;
+                gsub(/^[[:blank:]]+|[[:blank:]]+$/, "", signal);
+                print signal "|" ssid;
+            }
+        ' | sort -nr -t'|' -k1 | head -n 6)
     
     if [ -z "$networks" ]; then
         echo "ERR|Не найдено доступных сетей"
