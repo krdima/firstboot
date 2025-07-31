@@ -282,6 +282,7 @@ process_callback() {
             
         setup_duckdns)
             send_message "Введите токен и домен DuckDNS в формате: <токен> <домен>%0AПример: abcdef12-1234-5678 mydomain.duckdns.org" ""
+            echo "DEBUG: Запрошены данные DuckDNS" >&2
             ;;
             
         setup_ansible)
@@ -402,6 +403,7 @@ main() {
                         # DuckDNS данные
                         read token domain <<< "$text"
                         setup_duckdns "$token" "$domain"
+                        echo "DEBUG: Получены данные DuckDNS: token='$token' domain='$domain'" >&2
                         send_message "✅ DuckDNS настроен для домена: $domain" ""
                         show_main_menu
                     elif [ -f "/tmp/wifi_ssid_$CHAT_ID" ]; then
