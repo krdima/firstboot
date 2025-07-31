@@ -9,8 +9,8 @@ fi
 FINGERPRINT="$1"
 TG_BOT_TOKEN="$2"
 CHAT_ID="$3"
-GIT_REPO="https://github.com/krdima/firstboot.git"
-GIT_BRANCH="main"
+REPO_URL="https://github.com/krdima/firstboot.git"
+BRANCH="main"
 SCRIPT_NAME="bot.sh"
 INSTALL_DIR="/root/"
 
