@@ -408,7 +408,7 @@ main() {
                     if [ "$text" == "/start" ]; then
                         echo "DEBUG: Обработка /start" >&2
                         show_main_menu
-                    elif [[ "$text" =~ ^[a-zA-Z0-9\-]+\s+[a-zA-Z0-9\.\-]+ ]]; then
+                    elif [[ "$text" =~ ^[[:alnum:]\-_]+\s+[[:alnum:]\.\-]+$ ]]; then
                         # DuckDNS данные
                         echo "DEBUG: Обнаружены данные DuckDNS" >&2
                         read token domain <<< "$text"
