@@ -183,6 +183,10 @@ network:
       access-points:
         "$ssid":
           password: "$password"
+    routes:
+      - to: default
+        via: 192.168.0.1
+        metric: 50
 EOL
     
     # Устанавливаем правильные права доступа
